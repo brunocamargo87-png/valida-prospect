@@ -22,6 +22,7 @@ except ImportError:
 # ==========================================================
 BANNER_URL = "https://raw.githubusercontent.com/brunocamargo87-png/valida-prospect/main/banner_easyfunnel.png"
 LOGO_URL   = "https://raw.githubusercontent.com/brunocamargo87-png/valida-prospect/main/easyfunnel.png"
+# LOGO_URL está aqui só se você quiser usar depois; no layout atual usamos só o banner.
 
 
 # ==========================================================
@@ -313,78 +314,31 @@ def main():
 
     # ===== CSS customizado (hero + ajustes visuais) =====
     st.markdown(
-        f"""
+        """
         <style>
-        .block-container {{
+        .block-container {
             padding-top: 0rem;
             max-width: 1200px;
-        }}
-
-        .hero {{
-            position: relative;
-            height: 260px;
-            background-image: url('{BANNER_URL}');
-            background-size: cover;
-            background-position: center;
-            border-radius: 16px;
+        }
+        .hero-wrapper {
             margin-top: 0.8rem;
             margin-bottom: 1.8rem;
-            display: flex;
-            align-items: center;
-            padding: 30px 40px;
-        }}
-
-        .hero-logo {{
-            height: 72px;
-            margin-bottom: 8px;
-        }}
-
-        .hero-title {{
-            font-size: 40px;
-            font-weight: 700;
-            color: #E7FDF9;
-            margin: 0;
-            padding: 0;
-            line-height: 1.05;
-        }}
-
-        .hero-subtitle {{
-            font-size: 16px;
-            color: #C8E7E1;
-            margin-top: 6px;
-        }}
-
-        .hero-pill {{
-            display: inline-block;
-            margin-top: 16px;
-            padding: 6px 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(200, 231, 225, 0.5);
-            font-size: 12px;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: #C8E7E1;
-            background: rgba(5, 8, 22, 0.35);
-        }}
+        }
+        .hero-image {
+            width: 100%;
+            border-radius: 16px;
+            display: block;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # ===== HERO com logo + título =====
+    # ===== HERO: banner inteiro, sem corte =====
     st.markdown(
         f"""
-        <div class="hero">
-            <div>
-                <img src="{LOGO_URL}" class="hero-logo" />
-                <h1 class="hero-title">Valida Prospect</h1>
-                <div class="hero-subtitle">
-                    Enriquecimento de base para prospecção B2B • Easy Funnel Brasil
-                </div>
-                <div class="hero-pill">
-                    Validação de e-mail · Domínio · CNPJ · Segmento por CNAE
-                </div>
-            </div>
+        <div class="hero-wrapper">
+            <img src="{BANNER_URL}" class="hero-image" />
         </div>
         """,
         unsafe_allow_html=True,
