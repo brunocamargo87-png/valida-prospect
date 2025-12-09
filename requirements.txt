@@ -1,0 +1,6 @@
+pandas
+openpyxl
+fastapi
+uvicorn
+requests
+dnspython
