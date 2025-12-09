@@ -1,26 +1,28 @@
+import io
 import re
 import time
-import json
-import os
-import pandas as pd
 
-# Tenta importar a biblioteca de DNS (para checar domínio de e-mail)
+import pandas as pd
+import requests
+import streamlit as st
+
+# Tenta importar DNS (para validar domínio de e-mail)
 try:
     import dns.resolver as dns_resolver
 except ImportError:
     dns_resolver = None
 
-import requests
-
 
 # ==========================================================
-# 1. Validação de FORMATO do e-mail
+# Funções de negócio (validação e enriquecimento)
 # ==========================================================
+
 def email_valido_formato(email: str) -> bool:
+    """Valida o FORMATO básico do e-mail (não garante que ele exista)."""
     if not isinstance(email, str):
         return False
 
-    email = str(email).strip()
+    email = email.strip()
 
     if "@" not in email:
         return False
@@ -46,10 +48,8 @@ def email_valido_formato(email: str) -> bool:
     return True
 
 
-# ==========================================================
-# 2. Checar se o DOMÍNIO do e-mail existe (DNS)
-# ==========================================================
 def extrair_dominio(email: str):
+    """Extrai o domínio (parte depois do @) ou None se não der."""
     if not isinstance(email, str):
         return None
     email = email.strip()
@@ -61,9 +61,9 @@ def extrair_dominio(email: str):
 
 def dominio_existe(dominio: str) -> bool:
     """
-    Usa DNS para tentar descobrir se o domínio existe.
-    Primeiro tenta registro MX (e-mail), depois A (site).
-    Se der erro, devolve False.
+    Tenta descobrir se o domínio existe via DNS.
+    Primeiro tenta MX (e-mail), depois A (site).
+    Se não tiver dnspython ou der erro, devolve False.
     """
     if not isinstance(dominio, str):
         return False
@@ -73,7 +73,7 @@ def dominio_existe(dominio: str) -> bool:
         return False
 
     if dns_resolver is None:
-        # Se a lib dnspython não estiver disponível, não conseguimos checar de fato
+        # Sem dnspython não dá pra checar de verdade
         return False
 
     try:
@@ -87,12 +87,10 @@ def dominio_existe(dominio: str) -> bool:
             return False
 
 
-# ==========================================================
-# 3. Funções para CNPJ: limpar, consultar API, extrair CNAE/segmento
-# ==========================================================
 def limpar_cnpj(cnpj: str):
+    """Remove tudo que não é dígito e garante 14 dígitos."""
     if not isinstance(cnpj, str):
-        return None
+        cnpj = str(cnpj)
     digitos = re.sub(r"\D", "", cnpj)
     if len(digitos) != 14:
         return None
@@ -101,22 +99,19 @@ def limpar_cnpj(cnpj: str):
 
 def consultar_cnpj_api(cnpj_limpo: str):
     """
-    Usa a API pública do CNPJ.ws:
-    https://publica.cnpj.ws/cnpj/{cnpj}
-    Limite: 3 requisições por minuto no plano gratuito.
+    Consulta CNPJ na API pública CNPJ.ws.
+    Atenção: limite de ~3 requisições por minuto no gratuito.
     """
     base_url = "https://publica.cnpj.ws/cnpj/"
 
     try:
         resp = requests.get(base_url + cnpj_limpo, timeout=10)
 
-        # Se passou do limite
         if resp.status_code == 429:
-            print(f"⚠️  Recebido 429 (muitas requisições) para CNPJ {cnpj_limpo}.")
+            # limite estourado
             return None
 
         if resp.status_code != 200:
-            print(f"⚠️  Erro HTTP {resp.status_code} para CNPJ {cnpj_limpo}.")
             return None
 
         data = resp.json()
@@ -150,18 +145,14 @@ def consultar_cnpj_api(cnpj_limpo: str):
             "cnae_principal_descricao": cnae_desc,
         }
 
-    except Exception as e:
-        print(f"⚠️  Erro ao consultar CNPJ {cnpj_limpo}: {e}")
+    except Exception:
         return None
 
 
 def segmento_macro_por_cnae(cnae_codigo: str) -> str:
-    """
-    Agrupa por segmento macro usando os 2 primeiros dígitos do CNAE.
-    É uma simplificação, mas já ajuda bastante em análise.
-    """
+    """Agrupa o CNAE em um segmento macro simplificado."""
     if not isinstance(cnae_codigo, str):
-        return ""
+        cnae_codigo = str(cnae_codigo or "")
 
     digitos = re.sub(r"\D", "", cnae_codigo)
     if len(digitos) < 2:
@@ -178,35 +169,35 @@ def segmento_macro_por_cnae(cnae_codigo: str) -> str:
     if sec == 35:
         return "Eletricidade e gás"
     if 36 <= sec <= 39:
-        return "Água, esgoto, gestão de resíduos"
+        return "Água, esgoto, resíduos"
     if 41 <= sec <= 43:
         return "Construção"
     if 45 <= sec <= 47:
-        return "Comércio; reparo de veículos"
+        return "Comércio / Varejo"
     if 49 <= sec <= 53:
-        return "Transporte, armazenagem e correio"
+        return "Transporte e correio"
     if 55 <= sec <= 56:
         return "Alojamento e alimentação"
     if 58 <= sec <= 63:
         return "Informação e comunicação"
     if 64 <= sec <= 66:
-        return "Atividades financeiras e de seguros"
+        return "Finanças e seguros"
     if sec == 68:
-        return "Atividades imobiliárias"
+        return "Imobiliário"
     if 69 <= sec <= 75:
-        return "Serviços profissionais, científicos e técnicos"
+        return "Serviços profissionais"
     if 77 <= sec <= 82:
-        return "Serviços administrativos e complementares"
+        return "Serviços administrativos"
     if sec == 84:
         return "Administração pública"
     if sec == 85:
         return "Educação"
     if 86 <= sec <= 88:
-        return "Saúde humana e serviços sociais"
+        return "Saúde e assistência social"
     if 90 <= sec <= 93:
-        return "Artes, cultura, esporte e recreação"
+        return "Artes, esporte e recreação"
     if 94 <= sec <= 96:
-        return "Outras atividades de serviços"
+        return "Outros serviços"
     if 97 <= sec <= 98:
         return "Serviços domésticos"
     if sec == 99:
@@ -215,26 +206,17 @@ def segmento_macro_por_cnae(cnae_codigo: str) -> str:
     return ""
 
 
-# ==========================================================
-# 4. PROGRAMA PRINCIPAL
-# ==========================================================
-def main():
-    # Ajustado para sua planilha:
-    arquivo_entrada = "clientes.csv"
-    coluna_email = "Email"   # exatamente como está na planilha
-    coluna_cnpj = "CNPJ"     # exatamente como está na planilha
+def enriquecer_dataframe(df: pd.DataFrame, col_email: str, col_cnpj: str) -> pd.DataFrame:
+    """Aplica todas as validações/enriquecimentos na base."""
 
-    print("Lendo planilha de clientes...")
+    st.write("▶️ Iniciando enriquecimento da base...")
 
-    # CSV brasileiro normalmente vem com ; como separador
-    df = pd.read_csv(arquivo_entrada, sep=";")
+    # 1) Validação de formato de e-mail
+    st.write("📧 Validando formato dos e-mails...")
+    df["email_valido_formato"] = df[col_email].apply(email_valido_formato)
 
-    # 4.1 Validar formato de e-mail
-    print("Validando FORMATO dos e-mails...")
-    df["email_valido_formato"] = df[coluna_email].apply(email_valido_formato)
-
-    # 4.2 Validar se o domínio existe (DNS)
-    print("Checando se domínio de e-mail existe (DNS)...")
+    # 2) Validação de domínio de e-mail
+    st.write("🌐 Checando se domínio dos e-mails existe...")
     dominio_cache = {}
 
     def checar_dominio_email(email):
@@ -247,30 +229,22 @@ def main():
         dominio_cache[dom] = ok
         return ok
 
-    df["dominio_existe"] = df[coluna_email].apply(checar_dominio_email)
+    df["dominio_existe"] = df[col_email].apply(checar_dominio_email)
 
-    # 4.3 Consultar CNPJ com gotejamento (rate limit) + cache em arquivo
-    print("Consultando CNPJ na API pública em gotejamento (3 por minuto)...")
+    # 3) Consulta de CNPJ com gotejamento + cache em memória
+    st.write("🏢 Consultando CNPJ na API pública (gotejamento, pode demorar)...")
 
-    CACHE_FILE = "cnpj_cache.json"
-
-    # carrega cache de disco, se existir
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r", encoding="utf-8") as f:
-            cnpj_cache = json.load(f)
-    else:
-        cnpj_cache = {}
-
+    cnpj_cache = {}
     chamadas_api_no_ciclo = 0
     max_chamadas_por_ciclo = 3
-    tempo_espera = 65  # segundos entre blocos de 3 chamadas novas
+    tempo_espera = 65  # segundos entre blocos
 
-    def enriquecer_cnpj(cnpj):
-        nonlocal chamadas_api_no_ciclo, cnpj_cache
+    resultados = []
 
-        cnpj_limpo = limpar_cnpj(str(cnpj))
+    for idx, cnpj in enumerate(df[col_cnpj].tolist()):
+        cnpj_limpo = limpar_cnpj(cnpj)
         if not cnpj_limpo:
-            return pd.Series(
+            resultados.append(
                 {
                     "cnpj_situacao_cadastral": None,
                     "cnae_principal_codigo": None,
@@ -278,23 +252,22 @@ def main():
                     "segmento_macro": None,
                 }
             )
+            continue
 
-        # Se já temos no cache (de execuções anteriores ou desta), não consulta de novo
         if cnpj_limpo not in cnpj_cache:
-            # Se já batemos o limite, espera e reseta o contador
             if chamadas_api_no_ciclo >= max_chamadas_por_ciclo:
-                print("⏳ Limite de chamadas no ciclo atingido. Aguardando 65 segundos...")
+                st.write("⏳ Limite de consultas atingido. Aguardando alguns segundos...")
                 time.sleep(tempo_espera)
                 chamadas_api_no_ciclo = 0
 
             info = consultar_cnpj_api(cnpj_limpo)
-            cnpj_cache[cnpj_limpo] = info  # pode ser dict ou None
+            cnpj_cache[cnpj_limpo] = info
             chamadas_api_no_ciclo += 1
         else:
             info = cnpj_cache[cnpj_limpo]
 
         if not info:
-            return pd.Series(
+            resultados.append(
                 {
                     "cnpj_situacao_cadastral": None,
                     "cnae_principal_codigo": None,
@@ -302,33 +275,114 @@ def main():
                     "segmento_macro": None,
                 }
             )
+        else:
+            seg = segmento_macro_por_cnae(info.get("cnae_principal_codigo") or "")
+            resultados.append(
+                {
+                    "cnpj_situacao_cadastral": info.get("situacao_cadastral"),
+                    "cnae_principal_codigo": info.get("cnae_principal_codigo"),
+                    "cnae_principal_descricao": info.get("cnae_principal_descricao"),
+                    "segmento_macro": seg,
+                }
+            )
 
-        seg = segmento_macro_por_cnae(info.get("cnae_principal_codigo") or "")
+    enriquecido_df = pd.DataFrame(resultados)
+    df_final = pd.concat([df.reset_index(drop=True), enriquecido_df], axis=1)
 
-        return pd.Series(
-            {
-                "cnpj_situacao_cadastral": info.get("situacao_cadastral"),
-                "cnae_principal_codigo": info.get("cnae_principal_codigo"),
-                "cnae_principal_descricao": info.get("cnae_principal_descricao"),
-                "segmento_macro": seg,
-            }
+    return df_final
+
+
+# ==========================================================
+# App Streamlit (frontend)
+# ==========================================================
+
+def main():
+    st.set_page_config(
+        page_title="Valida Prospect – Enriquecimento de Base",
+        layout="wide",
+    )
+
+    st.title("🧠 Valida Prospect – Validador & Enriquecedor de Base de Clientes")
+    st.write(
+        """
+        Envie um arquivo com colunas de **empresa, CNPJ e e-mail** e receba de volta uma base
+        enriquecida com:
+        - ✅ Validação de formato de e-mail  
+        - ✅ Checagem de domínio (DNS)  
+        - ✅ Consulta de CNPJ em API pública  
+        - ✅ Segmento macro por CNAE  
+        """
+    )
+
+    uploaded_file = st.file_uploader(
+        "Envie seu arquivo (CSV com ; ou Excel)",
+        type=["csv", "xlsx"],
+    )
+
+    if not uploaded_file:
+        st.info("👆 Envie um arquivo para começar.")
+        return
+
+    # Detectar tipo do arquivo
+    if uploaded_file.name.lower().endswith(".csv"):
+        # Supondo separador ; como padrão Brasil
+        df = pd.read_csv(uploaded_file, sep=";")
+    else:
+        df = pd.read_excel(uploaded_file)
+
+    st.subheader("Pré-visualização da base enviada")
+    st.dataframe(df.head())
+
+    # Seleção das colunas de e-mail e CNPJ (flexível)
+    st.subheader("Mapeamento de colunas")
+
+    colunas = list(df.columns)
+
+    col_email = st.selectbox(
+        "Coluna de e-mail",
+        colunas,
+        index=colunas.index("Email") if "Email" in colunas else 0,
+    )
+    col_cnpj = st.selectbox(
+        "Coluna de CNPJ",
+        colunas,
+        index=colunas.index("CNPJ") if "CNPJ" in colunas else 0,
+    )
+
+    if st.button("🚀 Processar base"):
+        df_enriquecido = enriquecer_dataframe(df, col_email, col_cnpj)
+
+        st.subheader("Base enriquecida (primeiras linhas)")
+        st.dataframe(df_enriquecido.head())
+
+        # Visualizações simples
+        st.subheader("📊 Visualizações rápidas")
+
+        if "segmento_macro" in df_enriquecido.columns:
+            seg_counts = df_enriquecido["segmento_macro"].value_counts(dropna=True)
+            if not seg_counts.empty:
+                st.write("Distribuição por segmento macro:")
+                st.bar_chart(seg_counts)
+
+        if "cnpj_situacao_cadastral" in df_enriquecido.columns:
+            sit_counts = df_enriquecido["cnpj_situacao_cadastral"].value_counts(
+                dropna=True
+            )
+            if not sit_counts.empty:
+                st.write("Situação cadastral dos CNPJs:")
+                st.bar_chart(sit_counts)
+
+        # Gerar arquivo Excel para download
+        buffer = io.BytesIO()
+        df_enriquecido.to_excel(buffer, index=False)
+        buffer.seek(0)
+
+        st.download_button(
+            label="⬇️ Baixar base enriquecida (Excel)",
+            data=buffer,
+            file_name="base_enriquecida.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
-    enriquecido = df[coluna_cnpj].apply(enriquecer_cnpj)
-    df = pd.concat([df, enriquecido], axis=1)
-
-    # salva cache atualizado em disco
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(cnpj_cache, f, ensure_ascii=False)
-
-    # 4.4 Gerar nome de arquivo único com timestamp
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    saida = f"clientes_validado_completo_{timestamp}.xlsx"
-
-    df.to_excel(saida, index=False)
-
-    print(f"\n✅ Processo concluído! Arquivo gerado com sucesso: {saida}")
-    print("   (Os CNPJs já consultados ficaram salvos em cnpj_cache.json.)")
 
 
 if __name__ == "__main__":
