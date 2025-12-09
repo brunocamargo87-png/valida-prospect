@@ -1,11 +1,5 @@
 """
 MAIN.PY - Valida Prospect | Easy Funnel Brasil
-
-Antes de publicar, ajuste as duas constantes abaixo com os links RAW
-das suas imagens no GitHub (banner e logo), por exemplo:
-
-BANNER_URL = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/banner_easyfunnel.png"
-LOGO_URL   = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/logo_easyfunnel.png"
 """
 
 import io
@@ -24,10 +18,10 @@ except ImportError:
 
 
 # ==========================================================
-# CONFIG DE IMAGENS (AJUSTE AQUI PARA SUA CONTA GITHUB)
+# CONFIG DE IMAGENS (JÁ AJUSTADAS COM SEU REPO)
 # ==========================================================
-BANNER_URL = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/banner_easyfunnel.png"
-LOGO_URL   = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/logo_easyfunnel.png"
+BANNER_URL = "https://raw.githubusercontent.com/brunocamargo87-png/valida-prospect/main/banner_easyfunnel.png"
+LOGO_URL   = "https://raw.githubusercontent.com/brunocamargo87-png/valida-prospect/main/easyfunnel.png"
 
 
 # ==========================================================
