@@ -1,3 +1,13 @@
+"""
+MAIN.PY - Valida Prospect | Easy Funnel Brasil
+
+Antes de publicar, ajuste as duas constantes abaixo com os links RAW
+das suas imagens no GitHub (banner e logo), por exemplo:
+
+BANNER_URL = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/banner_easyfunnel.png"
+LOGO_URL   = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/logo_easyfunnel.png"
+"""
+
 import io
 import re
 import time
@@ -14,9 +24,15 @@ except ImportError:
 
 
 # ==========================================================
+# CONFIG DE IMAGENS (AJUSTE AQUI PARA SUA CONTA GITHUB)
+# ==========================================================
+BANNER_URL = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/banner_easyfunnel.png"
+LOGO_URL   = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/logo_easyfunnel.png"
+
+
+# ==========================================================
 # Funções de negócio (validação e enriquecimento)
 # ==========================================================
-
 def email_valido_formato(email: str) -> bool:
     """Valida o FORMATO básico do e-mail (não garante que ele exista)."""
     if not isinstance(email, str):
@@ -293,29 +309,110 @@ def enriquecer_dataframe(df: pd.DataFrame, col_email: str, col_cnpj: str) -> pd.
 
 
 # ==========================================================
-# App Streamlit (frontend)
+# App Streamlit (frontend estilizado)
 # ==========================================================
-
 def main():
     st.set_page_config(
-        page_title="Valida Prospect – Enriquecimento de Base",
+        page_title="Valida Prospect – Easy Funnel",
         layout="wide",
     )
 
-    st.title("🧠 Valida Prospect – Validador & Enriquecedor de Base de Clientes")
+    # ===== CSS customizado (hero + ajustes visuais) =====
+    st.markdown(
+        f"""
+        <style>
+        .block-container {{
+            padding-top: 0rem;
+            max-width: 1200px;
+        }}
+
+        .hero {{
+            position: relative;
+            height: 260px;
+            background-image: url('{BANNER_URL}');
+            background-size: cover;
+            background-position: center;
+            border-radius: 16px;
+            margin-top: 0.8rem;
+            margin-bottom: 1.8rem;
+            display: flex;
+            align-items: center;
+            padding: 30px 40px;
+        }}
+
+        .hero-logo {{
+            height: 72px;
+            margin-bottom: 8px;
+        }}
+
+        .hero-title {{
+            font-size: 40px;
+            font-weight: 700;
+            color: #E7FDF9;
+            margin: 0;
+            padding: 0;
+            line-height: 1.05;
+        }}
+
+        .hero-subtitle {{
+            font-size: 16px;
+            color: #C8E7E1;
+            margin-top: 6px;
+        }}
+
+        .hero-pill {{
+            display: inline-block;
+            margin-top: 16px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(200, 231, 225, 0.5);
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #C8E7E1;
+            background: rgba(5, 8, 22, 0.35);
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ===== HERO com logo + título =====
+    st.markdown(
+        f"""
+        <div class="hero">
+            <div>
+                <img src="{LOGO_URL}" class="hero-logo" />
+                <h1 class="hero-title">Valida Prospect</h1>
+                <div class="hero-subtitle">
+                    Enriquecimento de base para prospecção B2B • Easy Funnel Brasil
+                </div>
+                <div class="hero-pill">
+                    Validação de e-mail · Domínio · CNPJ · Segmento por CNAE
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ===== Texto de apoio =====
     st.write(
         """
-        Envie um arquivo com colunas de **empresa, CNPJ e e-mail** e receba de volta uma base
-        enriquecida com:
-        - ✅ Validação de formato de e-mail  
-        - ✅ Checagem de domínio (DNS)  
-        - ✅ Consulta de CNPJ em API pública  
-        - ✅ Segmento macro por CNAE  
+        **Como funciona:**
+        1. Envie um arquivo com colunas de **Empresa, CNPJ e E-mail** (CSV com `;` ou Excel).  
+        2. Mapeie as colunas corretas (caso os nomes sejam diferentes).  
+        3. O Valida Prospect enriquece a base com:  
+           - ✅ Validação de formato de e-mail  
+           - ✅ Checagem de domínio via DNS  
+           - ✅ Consulta de CNPJ em API pública  
+           - ✅ Classificação por segmento macro (CNAE)  
         """
     )
 
+    # ===== Upload do arquivo =====
     uploaded_file = st.file_uploader(
-        "Envie seu arquivo (CSV com ; ou Excel)",
+        "Envie seu arquivo de clientes",
         type=["csv", "xlsx"],
     )
 
@@ -354,6 +451,25 @@ def main():
 
         st.subheader("Base enriquecida (primeiras linhas)")
         st.dataframe(df_enriquecido.head())
+
+        # KPIs simples
+        st.subheader("📌 Indicadores rápidos")
+        col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+
+        total = len(df_enriquecido)
+        valid_email = df_enriquecido["email_valido_formato"].sum() if "email_valido_formato" in df_enriquecido else 0
+        dominio_ok = df_enriquecido["dominio_existe"].sum() if "dominio_existe" in df_enriquecido else 0
+
+        with col_kpi1:
+            st.metric("Total de registros", total)
+
+        with col_kpi2:
+            perc_email = (valid_email / total * 100) if total > 0 else 0
+            st.metric("E-mails com formato válido", f"{valid_email} ({perc_email:.1f}%)")
+
+        with col_kpi3:
+            perc_dom = (dominio_ok / total * 100) if total > 0 else 0
+            st.metric("Domínios existentes (DNS)", f"{dominio_ok} ({perc_dom:.1f}%)")
 
         # Visualizações simples
         st.subheader("📊 Visualizações rápidas")
